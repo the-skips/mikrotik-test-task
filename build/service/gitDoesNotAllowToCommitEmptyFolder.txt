@@ -1,0 +1,2 @@
+Yeah, basically name of the file says it all. Makefile depends on this folder to be present and I wanted to keep Makefile clean
+

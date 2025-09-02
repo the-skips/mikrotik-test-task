@@ -39,3 +39,7 @@
 
 # debug information files
 *.dwo
+
+# compiled binaries
+neighbourCli
+neighbourSearchingService
