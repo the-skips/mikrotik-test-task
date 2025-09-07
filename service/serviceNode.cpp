@@ -34,10 +34,10 @@ void ServiceNode::resetLastAliveTimeStamp() { whenWasLastAlive = std::chrono::st
 
 void ServiceNode::updateIpAddress(in_addr newIp) { ipAddress = newIp; }
 
-string ServiceNode::getIpAddress() {
+string ServiceNode::getIpAddress() const {
     char ipAddr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &ipAddress, ipAddr, INET_ADDRSTRLEN);
     return string(ipAddr);
 }
-string ServiceNode::getMacAddress() { return macAddress; }
+string ServiceNode::getMacAddress() const { return macAddress; }
 

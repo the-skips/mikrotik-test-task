@@ -15,8 +15,8 @@ public:
     void resetLastAliveTimeStamp();
     void updateIpAddress(in_addr newIp);
 
-    std::string getIpAddress();
-    std::string getMacAddress();
+    std::string getIpAddress() const;
+    std::string getMacAddress() const;
     uint32_t getSecondsPassedSinceLastActivity();
 
 
