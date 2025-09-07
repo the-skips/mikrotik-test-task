@@ -19,7 +19,7 @@ using namespace std;
 
 // constants are here for now
 static constexpr uint16_t servicePort = 9000;
-static constexpr uint32_t serviceTimeoutInSeconds = 10;
+static constexpr uint32_t serviceTimeoutInSeconds = 30;
 static constexpr const char* cliSocketPath = "/tmp/neighbourService.sock";
 
 // structs, enums (can be put into separate header file)
