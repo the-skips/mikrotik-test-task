@@ -17,19 +17,58 @@
 using namespace std;
 
 
-static unordered_map<string, ServiceNode> aliveNeighbours;
-static int inetSocket;
 
 // constants are here for now
 static constexpr uint16_t servicePort = 9000;
 static constexpr uint32_t serviceTimeoutInSeconds = 10;
 
+// structs, enums
 struct InterfaceInfo {
     string name;
     sockaddr_in broadcastAddr;
     string macAddress;
 };
+
+// globals
 static vector<InterfaceInfo> broadcastCapableInterfaces;
+static unordered_map<string, ServiceNode> aliveNeighbours;
+static int inetSocket;
+
+
+// function prototypes
+static void removeOldNeighbours(unordered_map<string, ServiceNode>& map);
+static int getUdpBroadcastSocket();
+static std::vector<InterfaceInfo> getInetInterfaces(int socket);
+static void broadcastHeartbeat(const std::vector<InterfaceInfo>& interfaces, const int sockFd);
+static void checkForUdpMessages(const int socket);
+void setup();
+void loop();
+
+
+// functions themselves
+
+int main () {
+    setup();
+    while (true) {
+        loop();
+        sleep(2);
+    }
+}
+
+void setup() {
+    ServiceNode testObject("127.0.0.1", "testMacAddress");
+    aliveNeighbours.insert({testObject.getMacAddress(), testObject});
+
+    inetSocket = getUdpBroadcastSocket();
+    broadcastCapableInterfaces = getInetInterfaces(inetSocket);
+    
+}
+
+void loop() {
+    broadcastHeartbeat(broadcastCapableInterfaces, inetSocket);
+    checkForUdpMessages(inetSocket);
+    removeOldNeighbours(aliveNeighbours);
+}
 
 static void removeOldNeighbours(unordered_map<string, ServiceNode>& map) {
     for (auto it = map.begin(); it != map.end();) {
@@ -195,26 +234,4 @@ static void checkForUdpMessages(const int socket) {
     }
 }
 
-void setup() {
-    ServiceNode testObject("127.0.0.1", "testMacAddress");
-    aliveNeighbours.insert({testObject.getMacAddress(), testObject});
-
-    inetSocket = getUdpBroadcastSocket();
-    broadcastCapableInterfaces = getInetInterfaces(inetSocket);
-    
-}
-
-void loop() {
-    broadcastHeartbeat(broadcastCapableInterfaces, inetSocket);
-    checkForUdpMessages(inetSocket);
-    removeOldNeighbours(aliveNeighbours);
-}
-
-int main () {
-    setup();
-    while (true) {
-        loop();
-        sleep(5);
-    }
-}
 
