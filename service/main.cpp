@@ -20,6 +20,10 @@ using namespace std;
 static unordered_map<string, ServiceNode> aliveNeighbours;
 static int inetSocket;
 
+// constants are here for now
+static constexpr uint16_t servicePort = 9000;
+static constexpr uint32_t serviceTimeoutInSeconds = 10;
+
 struct InterfaceInfo {
     string name;
     sockaddr_in broadcastAddr;
@@ -28,7 +32,6 @@ struct InterfaceInfo {
 static vector<InterfaceInfo> broadcastCapableInterfaces;
 
 static void removeOldNeighbours(unordered_map<string, ServiceNode>& map) {
-    static constexpr uint32_t serviceTimeoutInSeconds = 10;
     for (auto it = map.begin(); it != map.end();) {
         if (it->second.getSecondsPassedSinceLastActivity() > serviceTimeoutInSeconds) {
             cout << "Removed old service: " << it->second.getMacAddress() << "\n";
@@ -45,9 +48,27 @@ static int getUdpBroadcastSocket() {
         perror("socket");
         std::exit(1);
     }
+    // for sending messages
     int broadcastEnable = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0) {
-        perror("setsockopt");
+        perror("setsockopt(broadcast)");
+        close(sock);
+        std::exit(1);
+    }
+    // for receiving messages
+    int reuse = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+        perror("setsockopt(reuse address)");
+        close(sock);
+        std::exit(1);
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(servicePort);
+
+    if (bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+        perror("bind");
         close(sock);
         std::exit(1);
     }
@@ -75,6 +96,7 @@ static std::vector<InterfaceInfo> getInetInterfaces(int socket) {
             struct sockaddr_in* bcast = reinterpret_cast<sockaddr_in*>(interface->ifa_broadaddr);
             if (bcast) {
                 ifInfo.broadcastAddr = *bcast;
+                ifInfo.broadcastAddr.sin_port = htons(servicePort);
 
                 char buf[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, &bcast->sin_addr, buf, sizeof(buf));
@@ -107,6 +129,72 @@ static std::vector<InterfaceInfo> getInetInterfaces(int socket) {
     return inetInterfaces;
 }
 
+static void broadcastHeartbeat(const std::vector<InterfaceInfo>& interfaces, const int sockFd) {
+    for (const InterfaceInfo& iface : interfaces) {
+        socklen_t addrLen = sizeof(iface.broadcastAddr);
+
+        ssize_t sentBytes = sendto(sockFd,
+            iface.macAddress.c_str(),
+            iface.macAddress.length(),
+            0,
+            reinterpret_cast<const struct sockaddr*>(&iface.broadcastAddr),
+            addrLen
+        );
+        if (sentBytes < 0) {
+            perror(("sendto failed on interface " + iface.name).c_str());
+        } else {
+            std::cout << "Sent heartbeat from " << iface.macAddress
+                      << " on interface " << iface.name << std::endl;
+        }
+    }
+}
+
+static void checkForUdpMessages(const int socket) {
+    constexpr uint16_t bufferSize = 256;
+    char buffer[bufferSize];
+    sockaddr_in senderAddr{};
+    socklen_t addrLen = sizeof(senderAddr);
+
+    ssize_t bytesReceived = recvfrom(socket,
+        buffer, bufferSize-1,
+        MSG_DONTWAIT,  // non-blocking
+        reinterpret_cast<sockaddr*>(&senderAddr),
+        &addrLen
+    );
+    if (bytesReceived < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            perror("recvfrom");
+        }
+        return; // nothing to read right now
+    }
+    buffer[bytesReceived] = '\0';
+    std::string mac(buffer);
+
+    // ignore own heartbeats
+    for (const InterfaceInfo& iface : broadcastCapableInterfaces) {
+        if (mac == iface.macAddress) {
+            return;
+        }
+    }
+
+    char ipStr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &senderAddr.sin_addr, ipStr, sizeof(ipStr));
+
+    // update or insert neighbour
+    auto it = aliveNeighbours.find(mac);
+    if (it == aliveNeighbours.end()) {
+        ServiceNode newNode(senderAddr.sin_addr, mac);
+        aliveNeighbours.emplace(mac, newNode);
+        std::cout << "Discovered new neighbour " << mac
+                  << " at " << ipStr << std::endl;
+    } else {
+        it->second.resetLastAliveTimeStamp();
+        it->second.updateIpAddress(senderAddr.sin_addr); // just in case ip has dynamically changed
+        std::cout << "Refreshed neighbour " << mac
+                  << " at " << ipStr << std::endl;
+    }
+}
+
 void setup() {
     ServiceNode testObject("127.0.0.1", "testMacAddress");
     aliveNeighbours.insert({testObject.getMacAddress(), testObject});
@@ -117,8 +205,8 @@ void setup() {
 }
 
 void loop() {
-    //broadcastHeartbeat();
-    //checkForUdpMessages();
+    broadcastHeartbeat(broadcastCapableInterfaces, inetSocket);
+    checkForUdpMessages(inetSocket);
     removeOldNeighbours(aliveNeighbours);
 }
 
