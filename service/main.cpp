@@ -4,9 +4,11 @@
 #include <iostream>
 #include <unordered_map>
 #include <vector>
+#include <cstring>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <ifaddrs.h>
 #include <arpa/inet.h>
@@ -17,7 +19,13 @@ using namespace std;
 
 static unordered_map<string, ServiceNode> aliveNeighbours;
 static int inetSocket;
-static vector<sockaddr_in> broadcastAddresses;
+
+struct InterfaceInfo {
+    string name;
+    sockaddr_in broadcastAddr;
+    string macAddress;
+};
+static vector<InterfaceInfo> broadcastCapableInterfaces;
 
 static void removeOldNeighbours(unordered_map<string, ServiceNode>& map) {
     static constexpr uint32_t serviceTimeoutInSeconds = 10;
@@ -46,29 +54,57 @@ static int getUdpBroadcastSocket() {
     return sock;
 }
 
-static void getBroadcastAddresses(vector<sockaddr_in>& whereToStore) {
+static std::vector<InterfaceInfo> getInetInterfaces(int socket) {
     struct ifaddrs* interfaceListStart;
     if (getifaddrs(&interfaceListStart) == -1) {
         perror("getifaddrs");
         exit(1);
     }
+    std::vector<InterfaceInfo> inetInterfaces;
 
     for (struct ifaddrs* interface = interfaceListStart; interface != nullptr; interface = interface->ifa_next) {
         if (interface->ifa_addr == nullptr) continue;
 
-        if ((interface->ifa_addr->sa_family == AF_INET) && (interface->ifa_flags & IFF_BROADCAST)) {
+        if ((interface->ifa_addr->sa_family == AF_INET) && (interface->ifa_flags & IFF_BROADCAST)) { // inet4 interfaces with broadcast capability
+            InterfaceInfo ifInfo;
+
+            // interface name
+            ifInfo.name = interface->ifa_name;
+
+            // broadcast ip
             struct sockaddr_in* bcast = reinterpret_cast<sockaddr_in*>(interface->ifa_broadaddr);
             if (bcast) {
-                broadcastAddresses.push_back(*bcast);
+                ifInfo.broadcastAddr = *bcast;
 
                 char buf[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, &bcast->sin_addr, buf, sizeof(buf));
-                std::cout << "Interface " << interface->ifa_name << " broadcast: " << buf << std::endl;
+                std::cout << "Interface " << ifInfo.name
+                          << " broadcast: " << buf << std::endl;
             }
+            // mac
+            struct ifreq ifr;
+            strncpy(ifr.ifr_name, interface->ifa_name, IFNAMSIZ-1);
+            ifr.ifr_name[IFNAMSIZ-1] = '\0';
+
+            if (ioctl(socket, SIOCGIFHWADDR, &ifr) == 0) {
+                unsigned char* mac = reinterpret_cast<unsigned char*>(ifr.ifr_hwaddr.sa_data);
+                char macStr[18];
+                std::snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+                              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                ifInfo.macAddress = macStr;
+
+                std::cout << "Interface " << ifInfo.name
+                          << " MAC: " << ifInfo.macAddress << std::endl;
+            } else {
+                perror("ioctl SIOCGIFHWADDR");
+            }
+
+            inetInterfaces.push_back(ifInfo);
         }
     }
 
     freeifaddrs(interfaceListStart);
+    return inetInterfaces;
 }
 
 void setup() {
@@ -76,7 +112,7 @@ void setup() {
     aliveNeighbours.insert({testObject.getMacAddress(), testObject});
 
     inetSocket = getUdpBroadcastSocket();
-    getBroadcastAddresses(broadcastAddresses);
+    broadcastCapableInterfaces = getInetInterfaces(inetSocket);
     
 }
 
