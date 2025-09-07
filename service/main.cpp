@@ -1,3 +1,4 @@
+#include "cliServer.h"
 #include "serviceNode.h"
 
 #include <cstdint>
@@ -16,13 +17,12 @@
 
 using namespace std;
 
-
-
 // constants are here for now
 static constexpr uint16_t servicePort = 9000;
 static constexpr uint32_t serviceTimeoutInSeconds = 10;
+static constexpr const char* cliSocketPath = "/tmp/neighbourService.sock";
 
-// structs, enums
+// structs, enums (can be put into separate header file)
 struct InterfaceInfo {
     string name;
     sockaddr_in broadcastAddr;
@@ -33,6 +33,7 @@ struct InterfaceInfo {
 static vector<InterfaceInfo> broadcastCapableInterfaces;
 static unordered_map<string, ServiceNode> aliveNeighbours;
 static int inetSocket;
+static CliServer cliServer(cliSocketPath);
 
 
 // function prototypes
@@ -46,7 +47,6 @@ void loop();
 
 
 // functions themselves
-
 int main () {
     setup();
     while (true) {
@@ -61,13 +61,14 @@ void setup() {
 
     inetSocket = getUdpBroadcastSocket();
     broadcastCapableInterfaces = getInetInterfaces(inetSocket);
-    
+    cliServer.setup();
 }
 
 void loop() {
     broadcastHeartbeat(broadcastCapableInterfaces, inetSocket);
     checkForUdpMessages(inetSocket);
     removeOldNeighbours(aliveNeighbours);
+    cliServer.serverLoop(aliveNeighbours);
 }
 
 static void removeOldNeighbours(unordered_map<string, ServiceNode>& map) {
