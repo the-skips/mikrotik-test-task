@@ -1,6 +1,5 @@
 #include "cliServer.h"
 
-
 #include <iostream>
 
 #include <sys/socket.h>
@@ -50,20 +49,18 @@ void CliServer::setup() {
     cout << "CLI socket listening at " << path << endl;
 }
 
-void CliServer::serverLoop(const std::unordered_map<std::string, ServiceNode>& neighbours) {
+void CliServer::serverLoop(const std::unordered_map<std::string, ServiceNode>& neighbours) const {
     int clientFd = accept(cliSocket, nullptr, nullptr);
     if (clientFd < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
             perror("accept");
         return;
     }
-
     sendNeighbourList(clientFd, neighbours);
-
     close(clientFd);
 }
 
-void CliServer::sendNeighbourList(int clientFd, const unordered_map<string, ServiceNode>& neighbours) {
+void CliServer::sendNeighbourList(int clientFd, const unordered_map<string, ServiceNode>& neighbours) const {
     for (const auto& kv : neighbours) {
         string line = kv.second.getIpAddress() + " " + kv.second.getMacAddress() + "\n";
         if (write(clientFd, line.c_str(), line.length()) < 0)

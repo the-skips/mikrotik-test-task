@@ -11,12 +11,12 @@ struct CliServer {
     ~CliServer();
 
     void setup();
-    void serverLoop(const std::unordered_map<std::string, ServiceNode>& neighbours);
+    void serverLoop(const std::unordered_map<std::string, ServiceNode>& neighbours) const;
 
 private:
     int cliSocket;
     std::string path;
-    void sendNeighbourList(int clientFd, const std::unordered_map<std::string, ServiceNode>& neighbours);
+    void sendNeighbourList(int clientFd, const std::unordered_map<std::string, ServiceNode>& neighbours) const;
 };
 
 #endif // CLI_SERVER_H

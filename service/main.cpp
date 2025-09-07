@@ -56,9 +56,6 @@ int main () {
 }
 
 void setup() {
-    ServiceNode testObject("127.0.0.1", "testMacAddress");
-    aliveNeighbours.insert({testObject.getMacAddress(), testObject});
-
     inetSocket = getUdpBroadcastSocket();
     broadcastCapableInterfaces = getInetInterfaces(inetSocket);
     cliServer.setup();
