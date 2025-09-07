@@ -1,7 +1,11 @@
 #include "serviceNode.h"
 
+#include <arpa/inet.h>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 using namespace std;
 using namespace std::chrono;
@@ -12,8 +16,11 @@ static uint32_t getSecondsPassedBetweenTwoPoints(TimePoint from, TimePoint to) {
     else return std::chrono::duration<double>(from - to).count();
 }
 
-ServiceNode::ServiceNode(string ipAddress, string macAddress): ipAddress(ipAddress), macAddress(macAddress), whenWasLastAlive(steady_clock::now()) {
-
+ServiceNode::ServiceNode(string ipAddr, string macAddress): macAddress(macAddress), whenWasLastAlive(steady_clock::now()) {
+    if (inet_aton(ipAddr.c_str(), &ipAddress) == 0) {
+        cerr << "Invalid ip address supplied to ServiceNode: " << ipAddr << std::endl;
+        inet_aton("0.0.0.0", &ipAddress); // at least it will be some known state, instead of garbage
+    }
 }
 
 uint32_t ServiceNode::getSecondsPassedSinceLastActivity() {
@@ -22,6 +29,10 @@ uint32_t ServiceNode::getSecondsPassedSinceLastActivity() {
 
 void ServiceNode::resetLastAliveTimeStamp() { whenWasLastAlive = std::chrono::steady_clock::now(); }
 
-string ServiceNode::getIpAddress() { return ipAddress; }
+string ServiceNode::getIpAddress() {
+    char ipAddr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &ipAddress, ipAddr, INET_ADDRSTRLEN);
+    return string(ipAddr);
+}
 string ServiceNode::getMacAddress() { return macAddress; }
 
