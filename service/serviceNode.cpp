@@ -23,11 +23,16 @@ ServiceNode::ServiceNode(string ipAddr, string macAddress): macAddress(macAddres
     }
 }
 
+ServiceNode::ServiceNode(in_addr ipAddr, std::string macAddr): ipAddress(ipAddr), macAddress(macAddr) {
+}
+
 uint32_t ServiceNode::getSecondsPassedSinceLastActivity() {
     return getSecondsPassedBetweenTwoPoints(whenWasLastAlive, steady_clock::now());
 }
 
 void ServiceNode::resetLastAliveTimeStamp() { whenWasLastAlive = std::chrono::steady_clock::now(); }
+
+void ServiceNode::updateIpAddress(in_addr newIp) { ipAddress = newIp; }
 
 string ServiceNode::getIpAddress() {
     char ipAddr[INET_ADDRSTRLEN];

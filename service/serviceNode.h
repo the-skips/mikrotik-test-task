@@ -10,8 +10,10 @@ class ServiceNode {
 
 public:
     ServiceNode(std::string ipAddress, std::string macAddress);
+    ServiceNode(in_addr ipAddress, std::string macAddress);
 
     void resetLastAliveTimeStamp();
+    void updateIpAddress(in_addr newIp);
 
     std::string getIpAddress();
     std::string getMacAddress();
